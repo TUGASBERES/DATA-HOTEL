@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  const KEY = 'ntb-hospitality-data-v6';
-  const LEGACY_KEYS = ['ntb-hospitality-data-v5','ntb-hospitality-data-v4'];
+  const KEY = 'ntb-hospitality-data-v7';
+  const LEGACY_KEYS = ['ntb-hospitality-data-v6','ntb-hospitality-data-v5','ntb-hospitality-data-v4'];
   const DEFAULT_PRICING_RULES = { developerFee:100000, closingFee:150000, applicationPercent:15.5 };
   const clone = v => JSON.parse(JSON.stringify(v));
   const $ = (s, root=document) => root.querySelector(s);
@@ -17,9 +17,23 @@
 
   function normalizeDb(v){
     const d=clone(v||seed);
-    d.version=6;
+    d.version=7;
+    d.contacts=Array.isArray(d.contacts)?d.contacts:[];
+    d.hotels=Array.isArray(d.hotels)?d.hotels:[];
     d.pricingRules={...DEFAULT_PRICING_RULES,...(d.pricingRules||{})};
     if(window.NTB_REGIONS?.counts){ d.adminMaster={regencyCount:window.NTB_REGIONS.counts.regencies,districtCount:window.NTB_REGIONS.counts.districts,villageCount:window.NTB_REGIONS.counts.villages,urbanVillageCount:window.NTB_REGIONS.counts.kelurahan,ruralVillageCount:window.NTB_REGIONS.counts.desa}; }
+    d.hotels.forEach(h=>{
+      const owner=d.contacts.find(c=>c.id===h.ownerId);
+      const pic=d.contacts.find(c=>c.id===h.picId);
+      if(!h.ownerName&&owner) h.ownerName=owner.name||'';
+      if(!h.ownerPhone&&owner) h.ownerPhone=owner.phone||'';
+      if(!h.picName&&pic) h.picName=pic.name||'';
+      if(!h.picPhone&&pic) h.picPhone=pic.phone||'';
+      h.ownerName=h.ownerName||'';
+      h.ownerPhone=h.ownerPhone||'';
+      h.picName=h.picName||'';
+      h.picPhone=h.picPhone||'';
+    });
     return d;
   }
   function load(){
@@ -43,6 +57,22 @@
   function masterDistricts(regionId){ return masterRegency(regionId)?.districts||[]; }
   function masterDistrict(regionId,districtName){ return masterDistricts(regionId).find(d=>d.name===districtName); }
   function masterVillages(regionId,districtName){ return masterDistrict(regionId,districtName)?.villages||[]; }
+  function ownerPicRecords(){
+    const map=new Map();
+    const add=(role,name,phone,h)=>{
+      const n=String(name||'').trim(), p=String(phone||'').trim();
+      if(!n&&!p) return;
+      const key=`${role}|${p||n.toLowerCase()}`;
+      if(!map.has(key)) map.set(key,{role,name:n||'-',phone:p||'-',hotels:[]});
+      const row=map.get(key);
+      if(h?.name&&!row.hotels.includes(h.name)) row.hotels.push(h.name);
+    };
+    state.db.hotels.forEach(h=>{
+      add('Owner',h.ownerName,h.ownerPhone,h);
+      add('PIC',h.picName,h.picPhone,h);
+    });
+    return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,'id'));
+  }
   function statusClass(s){ return String(s||'').toLowerCase().replaceAll(' ','-'); }
   function pricingRules(){ return {...DEFAULT_PRICING_RULES,...(state.db.pricingRules||{})}; }
   function priceBreakdown(base){
@@ -114,7 +144,7 @@
         ${kpi('green','⌖','Kabupaten/Kota',num(m.regencyCount),'Master wilayah NTB')}
         ${kpi('yellow','▦','Kecamatan',num(m.districtCount),'Master wilayah NTB')}
         ${kpi('red','⌂','Desa/Kelurahan',num(m.villageCount),`${num(m.urbanVillageCount)} kelurahan + ${num(m.ruralVillageCount)} desa`)}
-        ${kpi('purple','♟','Owner & PIC',num(state.db.contacts.length),'Kontak tersimpan')}
+        ${kpi('purple','♟','Owner & PIC',num(ownerPicRecords().length),'Kontak dari data hotel')}
       </section>
 
       <section class="card filter-card section-gap">
@@ -149,7 +179,7 @@
 
   function toolbar(title,subtitle,type,filters=''){return `<section class="card toolbar-card"><div class="toolbar-top"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><div class="actions"><button class="btn btn-secondary" data-import>Import</button><button class="btn btn-secondary" data-export>Export</button>${type?`<button class="btn btn-primary" data-add="${type}">+ Tambah Data</button>`:''}</div></div>${filters?`<div class="toolbar-filters">${filters}</div>`:''}</section>`;}
   function renderHotels(){
-    const f=state.filters.hotels; const q=(f.q||'').toLowerCase(); const list=state.db.hotels.filter(h=>{const txt=`${h.name} ${h.code} ${h.district} ${h.village} ${h.address}`.toLowerCase();return(!q||txt.includes(q))&&(!f.regionId||h.regionId===f.regionId)&&(!f.status||h.status===f.status)});
+    const f=state.filters.hotels; const q=(f.q||'').toLowerCase(); const list=state.db.hotels.filter(h=>{const txt=`${h.name} ${h.code} ${h.district} ${h.village} ${h.address} ${h.ownerName||''} ${h.ownerPhone||''} ${h.picName||''} ${h.picPhone||''}`.toLowerCase();return(!q||txt.includes(q))&&(!f.regionId||h.regionId===f.regionId)&&(!f.status||h.status===f.status)});
     return `${head('Data Hotel','Master data hotel NTB, tanpa foto')}${toolbar('Data Hotel',`${num(state.db.hotels.length)} record hotel`,'hotel',`<input class="input" data-filter="hotels.q" value="${esc(f.q)}" placeholder="Cari nama/kode/alamat..."><select class="select" data-filter="hotels.regionId"><option value="">Semua Kabupaten/Kota</option>${state.db.regions.map(r=>`<option value="${r.id}" ${f.regionId===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select><select class="select" data-filter="hotels.status"><option value="">Semua Status</option>${['Aktif','Prospek','Negosiasi','Dormant'].map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select>`)}<section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>No</th><th>Kode / Hotel</th><th>Kabupaten/Kota</th><th>Kecamatan</th><th>Desa/Kelurahan</th><th>Alamat</th><th>Kamar</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${list.length?list.map((h,i)=>`<tr><td>${i+1}</td><td><span class="cell-main">${esc(h.name)}</span><span class="cell-sub">${esc(h.code)}</span></td><td>${esc(region(h.regionId)?.name||'-')}</td><td>${esc(h.district||'-')}</td><td>${esc(h.village||'-')}</td><td>${esc(h.address||'-')}</td><td>${num(h.roomCount||0)}</td><td><span class="status ${statusClass(h.status)}">${esc(h.status)}</span></td><td><button class="btn btn-secondary btn-sm" data-edit="hotel" data-id="${h.id}">Edit</button> <button class="btn btn-danger btn-sm" data-delete="hotel" data-id="${h.id}">Hapus</button></td></tr>`).join(''):`<tr><td colspan="9"><div class="empty"><b>Tidak ada data</b>Belum ada hotel yang sesuai filter.</div></td></tr>`}</tbody></table></div></section>`;
   }
   function renderRegions(){
@@ -166,12 +196,14 @@
       <section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>Hotel</th><th>Tipe</th><th>Weekday Final</th><th>Weekend Final</th><th>Corporate Final</th><th>OTA Final</th><th>Berlaku</th><th>Aksi</th></tr></thead><tbody>${list.length?list.map(p=>`<tr><td>${esc(hotel(p.hotelId)?.name||'-')}</td><td>${esc(room(p.roomTypeId)?.name||'-')}</td><td>${money(finalPrice(p.weekday))}<span class="cell-sub">Dasar ${money(p.weekday)}</span></td><td>${money(finalPrice(p.weekend))}<span class="cell-sub">Dasar ${money(p.weekend)}</span></td><td>${money(finalPrice(p.corporate))}<span class="cell-sub">Dasar ${money(p.corporate)}</span></td><td>${money(finalPrice(p.ota))}<span class="cell-sub">Dasar ${money(p.ota)}</span></td><td>${date(p.effectiveDate)}</td><td><button class="btn btn-secondary btn-sm" data-edit="price" data-id="${p.id}">Edit</button> <button class="btn btn-danger btn-sm" data-delete="price" data-id="${p.id}">Hapus</button></td></tr>`).join(''):`<tr><td colspan="8"><div class="empty"><b>Belum ada data harga</b>Tambahkan harga dasar untuk menghitung harga final otomatis.</div></td></tr>`}</tbody></table></div></section>`;
   }
   function renderContacts(){
-    const f=state.filters.contacts,q=(f.q||'').toLowerCase();const list=state.db.contacts.filter(c=>`${c.name} ${c.company} ${c.phone} ${c.email}`.toLowerCase().includes(q)&&(!f.role||c.role===f.role));
-    return `${head('Owner & PIC','Database kontak pemilik dan PIC hotel')}${toolbar('Owner & PIC',`${num(state.db.contacts.length)} kontak tersimpan`,'contact',`<input class="input" data-filter="contacts.q" value="${esc(f.q)}" placeholder="Cari nama/perusahaan..."><select class="select" data-filter="contacts.role"><option value="">Semua Peran</option><option ${f.role==='Owner'?'selected':''}>Owner</option><option ${f.role==='PIC'?'selected':''}>PIC</option></select>`)}<section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>Nama</th><th>Peran</th><th>Perusahaan</th><th>Telepon</th><th>Email</th><th>Hotel Terhubung</th><th>Aksi</th></tr></thead><tbody>${list.map(c=>`<tr><td><span class="cell-main">${esc(c.name)}</span></td><td><span class="badge">${esc(c.role)}</span></td><td>${esc(c.company||'-')}</td><td>${esc(c.phone||'-')}</td><td>${esc(c.email||'-')}</td><td>${num(state.db.hotels.filter(h=>h.ownerId===c.id||h.picId===c.id).length)}</td><td><button class="btn btn-secondary btn-sm" data-edit="contact" data-id="${c.id}">Edit</button> <button class="btn btn-danger btn-sm" data-delete="contact" data-id="${c.id}">Hapus</button></td></tr>`).join('')}</tbody></table></div></section>`;
+    const f=state.filters.contacts,q=(f.q||'').toLowerCase();
+    const all=ownerPicRecords();
+    const list=all.filter(c=>`${c.name} ${c.phone} ${c.hotels.join(' ')}`.toLowerCase().includes(q)&&(!f.role||c.role===f.role));
+    return `${head('Owner & PIC','Kontak Owner dan PIC tersinkron otomatis dari Data Hotel')}${toolbar('Owner & PIC',`${num(all.length)} kontak unik dari data hotel`,null,`<input class="input" data-filter="contacts.q" value="${esc(f.q)}" placeholder="Cari nama/no. telepon/hotel..."><select class="select" data-filter="contacts.role"><option value="">Semua Peran</option><option ${f.role==='Owner'?'selected':''}>Owner</option><option ${f.role==='PIC'?'selected':''}>PIC</option></select>`)}<section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>Nama</th><th>Peran</th><th>No. Telepon</th><th>Hotel Terhubung</th></tr></thead><tbody>${list.length?list.map(c=>`<tr><td><span class="cell-main">${esc(c.name)}</span></td><td><span class="badge">${esc(c.role)}</span></td><td>${esc(c.phone||'-')}</td><td>${esc(c.hotels.join(', ')||'-')}</td></tr>`).join(''):`<tr><td colspan="4"><div class="empty"><b>Belum ada kontak</b>Isi Nama Owner/No. Owner atau Nama PIC/No. PIC pada Data Hotel.</div></td></tr>`}</tbody></table></div></section><section class="notice section-gap">Data pada halaman ini tidak diinput terpisah. Owner & PIC otomatis mengikuti record hotel sehingga selalu sinkron.</section>`;
   }
   function renderReports(){
     const totalRooms=state.db.hotels.reduce((a,h)=>a+(Number(h.roomCount)||0),0);const avg=state.db.prices.length?Math.round(state.db.prices.reduce((a,p)=>a+finalPrice(p.weekday),0)/state.db.prices.length):0;const covered=state.db.regions.filter(r=>state.db.hotels.some(h=>h.regionId===r.id)).length;
-    return `${head('Laporan','Ringkasan database dan cakupan marketing')}${toolbar('Laporan Ringkas','Semua angka dihitung otomatis dari database',null)}<section class="report-grid section-gap"><article class="card report-box"><h3>Total Hotel</h3><strong>${num(state.db.hotels.length)}</strong><p>record tersimpan</p></article><article class="card report-box"><h3>Total Kamar</h3><strong>${num(totalRooms)}</strong><p>akumulasi jumlah kamar</p></article><article class="card report-box"><h3>Kab/Kota Tercover</h3><strong>${covered}/${state.db.adminMaster.regencyCount}</strong><p>wilayah dengan minimal 1 hotel</p></article><article class="card report-box"><h3>Owner & PIC</h3><strong>${num(state.db.contacts.length)}</strong><p>kontak tersimpan</p></article><article class="card report-box"><h3>Rate Tersimpan</h3><strong>${num(state.db.prices.length)}</strong><p>kombinasi hotel dan tipe kamar</p></article><article class="card report-box"><h3>Rata-rata Weekday Final</h3><strong style="font-size:19px">${money(avg)}</strong><p>sudah termasuk komponen harga otomatis</p></article></section><section class="card card-pad section-gap"><div class="data-head"><div><h2>Hotel per Kabupaten/Kota</h2><p>Distribusi record database</p></div></div><div class="table-wrap"><table><thead><tr><th>Kabupaten/Kota</th><th>Pulau</th><th>Hotel</th><th>% Database</th></tr></thead><tbody>${state.db.regions.map(r=>{const c=state.db.hotels.filter(h=>h.regionId===r.id).length;const pct=state.db.hotels.length?Math.round(c/state.db.hotels.length*100):0;return `<tr><td>${esc(r.name)}</td><td>${esc(r.island)}</td><td>${num(c)}</td><td>${pct}%</td></tr>`}).join('')}</tbody></table></div></section>`;
+    return `${head('Laporan','Ringkasan database dan cakupan marketing')}${toolbar('Laporan Ringkas','Semua angka dihitung otomatis dari database',null)}<section class="report-grid section-gap"><article class="card report-box"><h3>Total Hotel</h3><strong>${num(state.db.hotels.length)}</strong><p>record tersimpan</p></article><article class="card report-box"><h3>Total Kamar</h3><strong>${num(totalRooms)}</strong><p>akumulasi jumlah kamar</p></article><article class="card report-box"><h3>Kab/Kota Tercover</h3><strong>${covered}/${state.db.adminMaster.regencyCount}</strong><p>wilayah dengan minimal 1 hotel</p></article><article class="card report-box"><h3>Owner & PIC</h3><strong>${num(ownerPicRecords().length)}</strong><p>kontak dari data hotel</p></article><article class="card report-box"><h3>Rate Tersimpan</h3><strong>${num(state.db.prices.length)}</strong><p>kombinasi hotel dan tipe kamar</p></article><article class="card report-box"><h3>Rata-rata Weekday Final</h3><strong style="font-size:19px">${money(avg)}</strong><p>sudah termasuk komponen harga otomatis</p></article></section><section class="card card-pad section-gap"><div class="data-head"><div><h2>Hotel per Kabupaten/Kota</h2><p>Distribusi record database</p></div></div><div class="table-wrap"><table><thead><tr><th>Kabupaten/Kota</th><th>Pulau</th><th>Hotel</th><th>% Database</th></tr></thead><tbody>${state.db.regions.map(r=>{const c=state.db.hotels.filter(h=>h.regionId===r.id).length;const pct=state.db.hotels.length?Math.round(c/state.db.hotels.length*100):0;return `<tr><td>${esc(r.name)}</td><td>${esc(r.island)}</td><td>${num(c)}</td><td>${pct}%</td></tr>`}).join('')}</tbody></table></div></section>`;
   }
   function renderSettings(){return `${head('Pengaturan','Backup, restore, dan reset database lokal')}${toolbar('Pengaturan Database','Data tersimpan di browser (localStorage)',null)}<section class="card card-pad section-gap"><div class="actions"><button class="btn btn-primary" data-export>Export / Backup JSON</button><button class="btn btn-secondary" data-import>Import JSON</button><button class="btn btn-danger" data-reset>Reset ke Data Contoh</button></div><div class="notice section-gap"><b>Catatan:</b> versi GitHub Pages ini tidak memakai database server. Untuk penggunaan banyak admin/perangkat, data sebaiknya dipindahkan ke Supabase atau Firebase.</div></section>`;}
 
@@ -201,7 +233,7 @@
   function selectField(label,name,options,value='',extra=''){return `<div class="field ${extra.includes('full')?'full-span':''}"><label>${esc(label)}</label><select class="select" name="${name}">${options.map(o=>{const v=typeof o==='string'?o:o.value,n=typeof o==='string'?o:o.label;return `<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(n)}</option>`}).join('')}</select></div>`;}
   function openForm(type,id=''){
     const map={hotel:'Hotel',room:'Tipe Kamar',price:'Harga Kamar',contact:'Owner / PIC'}; $('#modalTitle').textContent=`${id?'Edit':'Tambah'} ${map[type]}`; $('#modalSubtitle').textContent='Data tanpa foto. Isi informasi yang diperlukan.'; const form=$('#modalForm'); let item;
-    if(type==='hotel'){item=state.db.hotels.find(x=>x.id===id)||{};form.innerHTML=`${field('Kode Hotel','code',item.code||'')}${field('Nama Hotel','name',item.name||'')}${selectField('Kabupaten/Kota','regionId',[{value:'',label:'Pilih wilayah'},...state.db.regions.map(r=>({value:r.id,label:r.name}))],item.regionId||'')}${field('Kecamatan','district',item.district||'')}${field('Desa/Kelurahan','village',item.village||'')}${field('Alamat','address',item.address||'','text','full')}${field('Jumlah Tipe Kamar','roomTypeCount',item.roomTypeCount||0,'number')}${field('Jumlah Kamar','roomCount',item.roomCount||0,'number')}${selectField('Status','status',['Aktif','Prospek','Negosiasi','Dormant'],item.status||'Prospek')}${selectField('Owner','ownerId',[{value:'',label:'-'},...state.db.contacts.filter(c=>c.role==='Owner').map(c=>({value:c.id,label:c.name}))],item.ownerId||'')}${selectField('PIC','picId',[{value:'',label:'-'},...state.db.contacts.filter(c=>c.role==='PIC').map(c=>({value:c.id,label:c.name}))],item.picId||'')}${field('Telepon','phone',item.phone||'')}${formActions(type,id)}`;}
+    if(type==='hotel'){item=state.db.hotels.find(x=>x.id===id)||{};form.innerHTML=`${field('Kode Hotel','code',item.code||'')}${field('Nama Hotel','name',item.name||'')}${selectField('Kabupaten/Kota','regionId',[{value:'',label:'Pilih wilayah'},...state.db.regions.map(r=>({value:r.id,label:r.name}))],item.regionId||'')}${field('Kecamatan','district',item.district||'')}${field('Desa/Kelurahan','village',item.village||'')}${field('Alamat','address',item.address||'','text','full')}${field('Jumlah Tipe Kamar','roomTypeCount',item.roomTypeCount||0,'number')}${field('Jumlah Kamar','roomCount',item.roomCount||0,'number')}${selectField('Status','status',['Aktif','Prospek','Negosiasi','Dormant'],item.status||'Prospek')}${field('Telepon Hotel','phone',item.phone||'')}${field('Nama Owner','ownerName',item.ownerName||'')}${field('No. Owner','ownerPhone',item.ownerPhone||'','tel')}${field('Nama PIC','picName',item.picName||'')}${field('No. PIC','picPhone',item.picPhone||'','tel')}${formActions(type,id)}`;}
     if(type==='room'){item=state.db.roomTypes.find(x=>x.id===id)||{};form.innerHTML=`${field('Kode','code',item.code||'')}${field('Nama Tipe','name',item.name||'')}${field('Kapasitas','capacity',item.capacity||2,'number')}${field('Tipe Bed','bedType',item.bedType||'')}${formActions(type,id)}`;}
     if(type==='contact'){item=state.db.contacts.find(x=>x.id===id)||{};form.innerHTML=`${selectField('Peran','role',['Owner','PIC'],item.role||'PIC')}${field('Nama','name',item.name||'')}${field('Perusahaan / Hotel','company',item.company||'')}${field('Telepon','phone',item.phone||'')}${field('Email','email',item.email||'','email','full')}${formActions(type,id)}`;}
     if(type==='price'){
@@ -249,8 +281,8 @@
   function closeModal(){$('#modalBackdrop').classList.add('hidden');}
   function toast(msg){const e=document.createElement('div');e.className='toast';e.textContent=msg;$('#toastStack').appendChild(e);setTimeout(()=>e.remove(),2600);}
   function exportData(){const b=new Blob([JSON.stringify(state.db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`ntb-hospitality-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);}
-  function importData(file){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.hotels||!d.regions||!d.contacts)throw new Error();d=normalizeDb(d);state.db=d;save();toast('Import berhasil');render();}catch(e){toast('File JSON tidak valid');}};r.readAsText(file);}
-  function resetData(){if(!confirm('Reset semua data lokal ke data contoh?'))return;state.db=clone(seed);save();toast('Database direset');render();}
+  function importData(file){const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.hotels||!d.regions)throw new Error();d=normalizeDb(d);state.db=d;save();toast('Import berhasil');render();}catch(e){toast('File JSON tidak valid');}};r.readAsText(file);}
+  function resetData(){if(!confirm('Reset semua data lokal ke data contoh?'))return;state.db=normalizeDb(seed);save();toast('Database direset');render();}
   function globalSearch(q){state.global=q; if(!q.trim())return;state.filters.hotels.q=q;location.hash='#/hotels';}
 
   $('#modalClose').onclick=closeModal; $('#modalBackdrop').onclick=e=>{if(e.target.id==='modalBackdrop')closeModal();}; document.addEventListener('click',e=>{if(e.target.matches('[data-cancel]'))closeModal();});
