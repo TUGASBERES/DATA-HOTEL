@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  const KEY = 'ntb-hospitality-data-v5';
-  const LEGACY_KEYS = ['ntb-hospitality-data-v4'];
+  const KEY = 'ntb-hospitality-data-v6';
+  const LEGACY_KEYS = ['ntb-hospitality-data-v5','ntb-hospitality-data-v4'];
   const DEFAULT_PRICING_RULES = { developerFee:100000, closingFee:150000, applicationPercent:15.5 };
   const clone = v => JSON.parse(JSON.stringify(v));
   const $ = (s, root=document) => root.querySelector(s);
@@ -17,8 +17,9 @@
 
   function normalizeDb(v){
     const d=clone(v||seed);
-    d.version=5;
+    d.version=6;
     d.pricingRules={...DEFAULT_PRICING_RULES,...(d.pricingRules||{})};
+    if(window.NTB_REGIONS?.counts){ d.adminMaster={regencyCount:window.NTB_REGIONS.counts.regencies,districtCount:window.NTB_REGIONS.counts.districts,villageCount:window.NTB_REGIONS.counts.villages,urbanVillageCount:window.NTB_REGIONS.counts.kelurahan,ruralVillageCount:window.NTB_REGIONS.counts.desa}; }
     return d;
   }
   function load(){
@@ -38,6 +39,10 @@
   function contact(id){ return state.db.contacts.find(x=>x.id===id); }
   function room(id){ return state.db.roomTypes.find(x=>x.id===id); }
   function distinct(arr){ return [...new Set(arr.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'id')); }
+  function masterRegency(regionId){ return window.NTB_REGIONS?.regencies?.find(r=>r.id===regionId); }
+  function masterDistricts(regionId){ return masterRegency(regionId)?.districts||[]; }
+  function masterDistrict(regionId,districtName){ return masterDistricts(regionId).find(d=>d.name===districtName); }
+  function masterVillages(regionId,districtName){ return masterDistrict(regionId,districtName)?.villages||[]; }
   function statusClass(s){ return String(s||'').toLowerCase().replaceAll(' ','-'); }
   function pricingRules(){ return {...DEFAULT_PRICING_RULES,...(state.db.pricingRules||{})}; }
   function priceBreakdown(base){
@@ -90,10 +95,8 @@
   }
   function dashboardFilterOptions(){
     const f=state.filters.dashboard;
-    const base=state.db.hotels.filter(h=>!f.regionId||h.regionId===f.regionId);
-    const districts=distinct(base.map(h=>h.district));
-    const base2=base.filter(h=>!f.district||h.district===f.district);
-    const villages=distinct(base2.map(h=>h.village));
+    const districts=f.regionId?masterDistricts(f.regionId).map(d=>d.name):[];
+    const villages=(f.regionId&&f.district)?masterVillages(f.regionId,f.district).map(v=>v.name):[];
     return {districts,villages};
   }
 
@@ -150,8 +153,8 @@
     return `${head('Data Hotel','Master data hotel NTB, tanpa foto')}${toolbar('Data Hotel',`${num(state.db.hotels.length)} record hotel`,'hotel',`<input class="input" data-filter="hotels.q" value="${esc(f.q)}" placeholder="Cari nama/kode/alamat..."><select class="select" data-filter="hotels.regionId"><option value="">Semua Kabupaten/Kota</option>${state.db.regions.map(r=>`<option value="${r.id}" ${f.regionId===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select><select class="select" data-filter="hotels.status"><option value="">Semua Status</option>${['Aktif','Prospek','Negosiasi','Dormant'].map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join('')}</select>`)}<section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>No</th><th>Kode / Hotel</th><th>Kabupaten/Kota</th><th>Kecamatan</th><th>Desa/Kelurahan</th><th>Alamat</th><th>Kamar</th><th>Status</th><th>Aksi</th></tr></thead><tbody>${list.length?list.map((h,i)=>`<tr><td>${i+1}</td><td><span class="cell-main">${esc(h.name)}</span><span class="cell-sub">${esc(h.code)}</span></td><td>${esc(region(h.regionId)?.name||'-')}</td><td>${esc(h.district||'-')}</td><td>${esc(h.village||'-')}</td><td>${esc(h.address||'-')}</td><td>${num(h.roomCount||0)}</td><td><span class="status ${statusClass(h.status)}">${esc(h.status)}</span></td><td><button class="btn btn-secondary btn-sm" data-edit="hotel" data-id="${h.id}">Edit</button> <button class="btn btn-danger btn-sm" data-delete="hotel" data-id="${h.id}">Hapus</button></td></tr>`).join(''):`<tr><td colspan="9"><div class="empty"><b>Tidak ada data</b>Belum ada hotel yang sesuai filter.</div></td></tr>`}</tbody></table></div></section>`;
   }
   function renderRegions(){
-    const counts=state.db.regions.map(r=>({...r,hotels:state.db.hotels.filter(h=>h.regionId===r.id).length,districts:distinct(state.db.hotels.filter(h=>h.regionId===r.id).map(h=>h.district)).length,villages:distinct(state.db.hotels.filter(h=>h.regionId===r.id).map(h=>h.village)).length}));
-    return `${head('Data Wilayah','Master wilayah NTB dan cakupan data hotel')}${toolbar('Master Kabupaten/Kota','10 kabupaten/kota NTB. Kecamatan dan desa/kelurahan pada tabel cakupan dihitung dari hotel yang sudah diinput.',null)}<section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>Kode</th><th>Kabupaten/Kota</th><th>Pulau</th><th>Hotel</th><th>Kecamatan Tercover</th><th>Desa/Kel. Tercover</th></tr></thead><tbody>${counts.map(r=>`<tr><td>${r.id}</td><td><span class="cell-main">${esc(r.name)}</span></td><td>${esc(r.island)}</td><td>${num(r.hotels)}</td><td>${num(r.districts)}</td><td>${num(r.villages)}</td></tr>`).join('')}</tbody></table></div></section><section class="notice section-gap">Master administrasi penuh NTB: <b>${num(state.db.adminMaster.regencyCount)} kabupaten/kota</b>, <b>${num(state.db.adminMaster.districtCount)} kecamatan</b>, dan <b>${num(state.db.adminMaster.villageCount)} desa/kelurahan</b>. Angka “tercover” hanya menghitung wilayah yang sudah muncul pada record hotel.</section>`;
+    const counts=state.db.regions.map(r=>({...r,hotels:state.db.hotels.filter(h=>h.regionId===r.id).length,districts:masterDistricts(r.id).length,villages:masterDistricts(r.id).reduce((a,d)=>a+(d.villages?.length||0),0)}));
+    return `${head('Data Wilayah','Master wilayah NTB dan cakupan data hotel')}${toolbar('Master Kabupaten/Kota','Master resmi seluruh kabupaten/kota, kecamatan, dan desa/kelurahan NTB.',null)}<section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>Kode</th><th>Kabupaten/Kota</th><th>Pulau</th><th>Hotel</th><th>Kecamatan</th><th>Desa/Kel.</th></tr></thead><tbody>${counts.map(r=>`<tr><td>${r.id}</td><td><span class="cell-main">${esc(r.name)}</span></td><td>${esc(r.island)}</td><td>${num(r.hotels)}</td><td>${num(r.districts)}</td><td>${num(r.villages)}</td></tr>`).join('')}</tbody></table></div></section><section class="notice section-gap">Master administrasi penuh NTB: <b>${num(state.db.adminMaster.regencyCount)} kabupaten/kota</b>, <b>${num(state.db.adminMaster.districtCount)} kecamatan</b>, dan <b>${num(state.db.adminMaster.villageCount)} desa/kelurahan</b>. Dropdown wilayah hotel dan filter dashboard menggunakan master lengkap ini.</section>`;
   }
   function renderRooms(){return `${head('Tipe Kamar','Master tipe kamar')}${toolbar('Tipe Kamar',`${num(state.db.roomTypes.length)} tipe kamar`,'room')}<section class="card card-pad section-gap"><div class="table-wrap"><table><thead><tr><th>Kode</th><th>Nama</th><th>Kapasitas</th><th>Tipe Bed</th><th>Rate Terhubung</th><th>Aksi</th></tr></thead><tbody>${state.db.roomTypes.map(r=>`<tr><td>${esc(r.code)}</td><td><span class="cell-main">${esc(r.name)}</span></td><td>${num(r.capacity)} orang</td><td>${esc(r.bedType||'-')}</td><td>${num(state.db.prices.filter(p=>p.roomTypeId===r.id).length)}</td><td><button class="btn btn-secondary btn-sm" data-edit="room" data-id="${r.id}">Edit</button> <button class="btn btn-danger btn-sm" data-delete="room" data-id="${r.id}">Hapus</button></td></tr>`).join('')}</tbody></table></div></section>`;}
   function renderPrices(){
@@ -198,6 +201,26 @@
     form.onsubmit=e=>saveForm(e,type,id);
     $('#modalBackdrop').classList.remove('hidden');
     if(type==='price') bindPricePreview(form);
+    if(type==='hotel') bindHotelRegionSelects(form);
+  }
+  function bindHotelRegionSelects(form){
+    const oldDistrict=form.elements.district, oldVillage=form.elements.village, regionSelect=form.elements.regionId;
+    if(!oldDistrict||!oldVillage||!regionSelect) return;
+    const district=document.createElement('select'); district.className='select'; district.name='district';
+    const village=document.createElement('select'); village.className='select'; village.name='village';
+    oldDistrict.replaceWith(district); oldVillage.replaceWith(village);
+    const fillDistricts=(keep='')=>{
+      district.innerHTML='<option value="">Pilih kecamatan</option>'+masterDistricts(regionSelect.value).map(d=>'<option value="'+esc(d.name)+'">'+esc(d.name)+'</option>').join('');
+      if([...district.options].some(o=>o.value===keep)) district.value=keep;
+    };
+    const fillVillages=(keep='')=>{
+      village.innerHTML='<option value="">Pilih desa/kelurahan</option>'+masterVillages(regionSelect.value,district.value).map(v=>'<option value="'+esc(v.name)+'">'+esc(v.name)+' ('+esc(v.type)+')</option>').join('');
+      if([...village.options].some(o=>o.value===keep)) village.value=keep;
+    };
+    const initialDistrict=oldDistrict.value||'', initialVillage=oldVillage.value||'';
+    fillDistricts(initialDistrict); fillVillages(initialVillage);
+    regionSelect.addEventListener('change',()=>{ fillDistricts(''); fillVillages(''); });
+    district.addEventListener('change',()=>fillVillages(''));
   }
   function bindPricePreview(form){
     const keys=['weekday','weekend','corporate','ota'];
