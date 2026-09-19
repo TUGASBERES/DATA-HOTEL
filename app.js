@@ -128,7 +128,7 @@
       </section>
 
       <section class="dashboard-grid section-gap">
-        <article class="card card-pad">
+        <article class="card card-pad" id="hotelSearchResults">
           <div class="data-head"><div><h2>Daftar Hotel</h2><p>Hasil filter: ${num(list.length)} data hotel</p></div><button class="link-btn" data-go="hotels">Lihat Semua →</button></div>
           <div class="table-wrap"><table><thead><tr><th>No</th><th>Nama Hotel</th><th>Kabupaten/Kota</th><th>Kecamatan</th><th>Desa/Kelurahan</th><th>Jumlah Tipe</th><th>Aksi</th></tr></thead><tbody>
           ${list.length?list.slice(0,8).map((h,i)=>`<tr><td>${i+1}</td><td><span class="cell-main">${esc(h.name)}</span><span class="cell-sub">${esc(h.code)}</span></td><td>${esc(region(h.regionId)?.name||'-')}</td><td>${esc(h.district||'-')}</td><td>${esc(h.village||'-')}</td><td>${num(h.roomTypeCount||0)}</td><td><button class="btn btn-secondary btn-sm" data-edit="hotel" data-id="${h.id}">Lihat / Edit</button></td></tr>`).join(''):`<tr><td colspan="7"><div class="empty"><b>Data tidak ditemukan</b>Ubah filter untuk melihat data lainnya.</div></td></tr>`}
@@ -177,8 +177,18 @@
 
   function bindView(){
     $$('[data-go]').forEach(b=>b.onclick=()=>location.hash=`#/${b.dataset.go}`);
-    $$('[data-dash-filter]').forEach(el=>el.onchange=()=>{ const k=el.dataset.dashFilter; state.filters.dashboard[k]=el.value; if(k==='regionId'){state.filters.dashboard.district='';state.filters.dashboard.village='';} if(k==='district')state.filters.dashboard.village=''; render(); });
-    $$('[data-filter]').forEach(el=>{const evt=el.tagName==='INPUT'?'input':'change';el.addEventListener(evt,()=>{const [grp,key]=el.dataset.filter.split('.');state.filters[grp][key]=el.value;render();});});
+    $('[data-dash-filter]').forEach(el=>el.onchange=()=>{ const k=el.dataset.dashFilter; state.filters.dashboard[k]=el.value; if(k==='regionId'){state.filters.dashboard.district='';state.filters.dashboard.village='';} if(k==='district')state.filters.dashboard.village=''; render(); });
+    $('[data-search-hotels]').forEach(b=>b.onclick=()=>{
+      const results=dashboardFiltered();
+      const f=state.filters.dashboard;
+      const labels=[];
+      if(f.regionId) labels.push(region(f.regionId)?.name||f.regionId);
+      if(f.district) labels.push(f.district);
+      if(f.village) labels.push(f.village);
+      toast(`${num(results.length)} hotel ditemukan${labels.length?' di '+labels.join(', '):''}`);
+      setTimeout(()=>document.querySelector('#hotelSearchResults')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
+    });
+    $('[data-filter]').forEach(el=>{const evt=el.tagName==='INPUT'?'input':'change';el.addEventListener(evt,()=>{const [grp,key]=el.dataset.filter.split('.');state.filters[grp][key]=el.value;render();});});
     $$('[data-add]').forEach(b=>b.onclick=()=>openForm(b.dataset.add));
     $$('[data-edit]').forEach(b=>b.onclick=()=>openForm(b.dataset.edit,b.dataset.id));
     $$('[data-delete]').forEach(b=>b.onclick=()=>remove(b.dataset.delete,b.dataset.id));
