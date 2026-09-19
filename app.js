@@ -11,6 +11,33 @@
   const num = n => new Intl.NumberFormat('id-ID').format(Number(n)||0);
   const date = v => v ? new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(v)) : '-';
   const uid = p => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
+  const REGION_PREFIX = {
+    "5201":"LB",
+    "5202":"LT",
+    "5203":"LE",
+    "5204":"SB",
+    "5205":"DP",
+    "5206":"BM",
+    "5207":"SW",
+    "5208":"LU",
+    "5271":"MT",
+    "5272":"BT"
+  };
+
+  function hotelPrefix(regionId){
+    return REGION_PREFIX[regionId] || "HT";
+  }
+
+  function generateHotelCode(regionId){
+    const prefix = hotelPrefix(regionId);
+    const nums = state.db.hotels
+      .filter(h => String(h.code||"").startsWith(prefix+"-"))
+      .map(h => Number(String(h.code).split("-")[1]) || 0);
+
+    const next = (nums.length ? Math.max(...nums) : 0) + 1;
+    return `${prefix}-${String(next).padStart(3,"0")}`;
+  }
+
 
   const seed = clone(window.NTB_SEED);
   const state = { db: load(), route:'dashboard', filters:{dashboard:{regionId:'',district:'',village:''},hotels:{q:'',regionId:'',status:''},contacts:{q:'',role:''},prices:{q:''}}, global:'' };
@@ -233,7 +260,7 @@
   function selectField(label,name,options,value='',extra=''){return `<div class="field ${extra.includes('full')?'full-span':''}"><label>${esc(label)}</label><select class="select" name="${name}">${options.map(o=>{const v=typeof o==='string'?o:o.value,n=typeof o==='string'?o:o.label;return `<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(n)}</option>`}).join('')}</select></div>`;}
   function openForm(type,id=''){
     const map={hotel:'Hotel',room:'Tipe Kamar',price:'Harga Kamar',contact:'Owner / PIC'}; $('#modalTitle').textContent=`${id?'Edit':'Tambah'} ${map[type]}`; $('#modalSubtitle').textContent='Data tanpa foto. Isi informasi yang diperlukan.'; const form=$('#modalForm'); let item;
-    if(type==='hotel'){item=state.db.hotels.find(x=>x.id===id)||{};form.innerHTML=`${field('Kode Hotel','code',item.code||'')}${field('Nama Hotel','name',item.name||'')}${selectField('Kabupaten/Kota','regionId',[{value:'',label:'Pilih wilayah'},...state.db.regions.map(r=>({value:r.id,label:r.name}))],item.regionId||'')}${field('Kecamatan','district',item.district||'')}${field('Desa/Kelurahan','village',item.village||'')}${field('Alamat','address',item.address||'','text','full')}${field('Jumlah Tipe Kamar','roomTypeCount',item.roomTypeCount||0,'number')}${field('Jumlah Kamar','roomCount',item.roomCount||0,'number')}${selectField('Status','status',['Aktif','Prospek','Negosiasi','Dormant'],item.status||'Prospek')}${field('Telepon Hotel','phone',item.phone||'')}${field('Nama Owner','ownerName',item.ownerName||'')}${field('No. Owner','ownerPhone',item.ownerPhone||'','tel')}${field('Nama PIC','picName',item.picName||'')}${field('No. PIC','picPhone',item.picPhone||'','tel')}${formActions(type,id)}`;}
+    if(type==='hotel'){item=state.db.hotels.find(x=>x.id===id)||{};form.innerHTML=`${field('Kode Hotel','code',item.code||'','text','readonly')}${field('Nama Hotel','name',item.name||'')}${selectField('Kabupaten/Kota','regionId',[{value:'',label:'Pilih wilayah'},...state.db.regions.map(r=>({value:r.id,label:r.name}))],item.regionId||'')}${field('Kecamatan','district',item.district||'')}${field('Desa/Kelurahan','village',item.village||'')}${field('Alamat','address',item.address||'','text','full')}${field('Jumlah Tipe Kamar','roomTypeCount',item.roomTypeCount||0,'number')}${field('Jumlah Kamar','roomCount',item.roomCount||0,'number')}${selectField('Status','status',['Aktif','Prospek','Negosiasi','Dormant'],item.status||'Prospek')}${field('Telepon Hotel','phone',item.phone||'')}${field('Nama Owner','ownerName',item.ownerName||'')}${field('No. Owner','ownerPhone',item.ownerPhone||'','tel')}${field('Nama PIC','picName',item.picName||'')}${field('No. PIC','picPhone',item.picPhone||'','tel')}${formActions(type,id)}`;}
     if(type==='room'){item=state.db.roomTypes.find(x=>x.id===id)||{};form.innerHTML=`${field('Kode','code',item.code||'')}${field('Nama Tipe','name',item.name||'')}${field('Kapasitas','capacity',item.capacity||2,'number')}${field('Tipe Bed','bedType',item.bedType||'')}${formActions(type,id)}`;}
     if(type==='contact'){item=state.db.contacts.find(x=>x.id===id)||{};form.innerHTML=`${selectField('Peran','role',['Owner','PIC'],item.role||'PIC')}${field('Nama','name',item.name||'')}${field('Perusahaan / Hotel','company',item.company||'')}${field('Telepon','phone',item.phone||'')}${field('Email','email',item.email||'','email','full')}${formActions(type,id)}`;}
     if(type==='price'){
@@ -243,7 +270,12 @@
     form.onsubmit=e=>saveForm(e,type,id);
     $('#modalBackdrop').classList.remove('hidden');
     if(type==='price') bindPricePreview(form);
-    if(type==='hotel') bindHotelRegionSelects(form);
+    if(type==='hotel'){
+      bindHotelRegionSelects(form);
+      if(!id && form.elements.regionId && form.elements.code && form.elements.regionId.value){
+        form.elements.code.value = generateHotelCode(form.elements.regionId.value);
+      }
+    }
   }
   function bindHotelRegionSelects(form){
     const oldDistrict=form.elements.district, oldVillage=form.elements.village, regionSelect=form.elements.regionId;
@@ -261,7 +293,13 @@
     };
     const initialDistrict=oldDistrict.value||'', initialVillage=oldVillage.value||'';
     fillDistricts(initialDistrict); fillVillages(initialVillage);
-    regionSelect.addEventListener('change',()=>{ fillDistricts(''); fillVillages(''); });
+    regionSelect.addEventListener('change',()=>{
+      fillDistricts('');
+      fillVillages('');
+      if(!id && form.elements.code){
+        form.elements.code.value = generateHotelCode(regionSelect.value);
+      }
+    });
     district.addEventListener('change',()=>fillVillages(''));
   }
   function bindPricePreview(form){
@@ -276,7 +314,16 @@
     draw();
   }
   function formActions(type,id){return `<div class="form-actions"><button type="button" class="btn btn-secondary" data-cancel>Batal</button><button type="submit" class="btn btn-primary">Simpan Data</button></div>`;}
-  function saveForm(e,type,id){e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());let arr,key,prefix;if(type==='hotel'){arr=state.db.hotels;key='hotel';prefix='H';d.roomTypeCount=+d.roomTypeCount||0;d.roomCount=+d.roomCount||0;d.updatedAt=new Date().toISOString();}if(type==='room'){arr=state.db.roomTypes;key='room';prefix='R';d.capacity=+d.capacity||0;}if(type==='contact'){arr=state.db.contacts;key='contact';prefix='C';}if(type==='price'){arr=state.db.prices;key='price';prefix='P';['weekday','weekend','corporate','ota'].forEach(k=>d[k]=+d[k]||0);}if(id){const i=arr.findIndex(x=>x.id===id);arr[i]={...arr[i],...d};}else{arr.push({id:uid(prefix),...d});}save();closeModal();toast('Data berhasil disimpan');render();}
+  function saveForm(e,type,id){e.preventDefault();const d=Object.fromEntries(new FormData(e.currentTarget).entries());let arr,key,prefix;if(type==='hotel'){
+      arr=state.db.hotels;
+      key='hotel';
+      prefix='H';
+      if(!d.code && d.regionId) d.code=generateHotelCode(d.regionId);
+      if(!id && arr.some(h=>h.code===d.code)) d.code=generateHotelCode(d.regionId);
+      d.roomTypeCount=+d.roomTypeCount||0;
+      d.roomCount=+d.roomCount||0;
+      d.updatedAt=new Date().toISOString();
+    }if(type==='room'){arr=state.db.roomTypes;key='room';prefix='R';d.capacity=+d.capacity||0;}if(type==='contact'){arr=state.db.contacts;key='contact';prefix='C';}if(type==='price'){arr=state.db.prices;key='price';prefix='P';['weekday','weekend','corporate','ota'].forEach(k=>d[k]=+d[k]||0);}if(id){const i=arr.findIndex(x=>x.id===id);arr[i]={...arr[i],...d};}else{arr.push({id:uid(prefix),...d});}save();closeModal();toast('Data berhasil disimpan');render();}
   function remove(type,id){let arr;if(type==='hotel'){if(state.db.prices.some(p=>p.hotelId===id))return toast('Hotel masih terhubung ke data harga. Hapus rate terlebih dahulu.');arr=state.db.hotels;}if(type==='room'){if(state.db.prices.some(p=>p.roomTypeId===id))return toast('Tipe kamar masih terhubung ke harga.');arr=state.db.roomTypes;}if(type==='contact'){if(state.db.hotels.some(h=>h.ownerId===id||h.picId===id))return toast('Kontak masih terhubung ke hotel.');arr=state.db.contacts;}if(type==='price')arr=state.db.prices;if(!arr||!confirm('Hapus data ini?'))return;arr.splice(arr.findIndex(x=>x.id===id),1);save();toast('Data dihapus');render();}
   function closeModal(){$('#modalBackdrop').classList.add('hidden');}
   function toast(msg){const e=document.createElement('div');e.className='toast';e.textContent=msg;$('#toastStack').appendChild(e);setTimeout(()=>e.remove(),2600);}
