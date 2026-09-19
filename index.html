@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#16344c" />
+  <meta name="description" content="Dashboard database hotel NTB berbasis data tanpa foto." />
+  <title>NTB Hospitality Database</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-symbol" aria-hidden="true">⌁</div>
+      <div><strong>NTB DATA</strong><span>Hospitality Database</span></div>
+    </div>
+    <nav class="nav" id="nav">
+      <a class="nav-link active" href="#/dashboard" data-route="dashboard"><span>⌂</span>Dashboard</a>
+      <a class="nav-link" href="#/hotels" data-route="hotels"><span>▦</span>Data Hotel</a>
+      <a class="nav-link" href="#/regions" data-route="regions"><span>⌖</span>Data Wilayah</a>
+      <a class="nav-link" href="#/rooms" data-route="rooms"><span>▤</span>Tipe Kamar</a>
+      <a class="nav-link" href="#/prices" data-route="prices"><span>▣</span>Harga Kamar</a>
+      <a class="nav-link" href="#/contacts" data-route="contacts"><span>♙</span>Owner & PIC</a>
+      <a class="nav-link" href="#/reports" data-route="reports"><span>▥</span>Laporan</a>
+      <a class="nav-link" href="#/settings" data-route="settings"><span>⚙</span>Pengaturan</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="admin-mini"><span class="avatar">A</span><span><b>Admin</b><small>Administrator</small></span></div>
+      <button class="sidebar-btn" id="backupBtn">⇩ Backup JSON</button>
+    </div>
+  </aside>
+
+  <div class="main-wrap">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="Buka navigasi">☰</button>
+      <div class="global-search"><span>⌕</span><input id="globalSearch" type="search" placeholder="Cari hotel, wilayah, owner/PIC..." /></div>
+      <div class="top-spacer"></div>
+      <div class="admin-pill"><span class="avatar">A</span><span>Admin</span></div>
+    </header>
+    <main id="app" class="content"></main>
+  </div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+<div class="modal-backdrop hidden" id="modalBackdrop">
+  <section class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><div><h2 id="modalTitle">Form</h2><p id="modalSubtitle"></p></div><button id="modalClose" class="icon-btn">×</button></div>
+    <form id="modalForm" class="modal-body"></form>
+  </section>
+</div>
+<input id="importFile" type="file" accept="application/json,.json" hidden />
+<script src="seed-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
