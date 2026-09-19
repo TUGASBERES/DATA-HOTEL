@@ -1,0 +1,13 @@
+
+/* Tambahan style Inventory Kamar
+   Tidak mengubah style lama */
+
+.inventory-card {
+  padding:16px;
+  border-radius:12px;
+}
+
+.inventory-table {
+  width:100%;
+  border-collapse:collapse;
+}
