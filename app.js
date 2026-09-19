@@ -209,8 +209,8 @@
 
   function bindView(){
     $$('[data-go]').forEach(b=>b.onclick=()=>location.hash=`#/${b.dataset.go}`);
-    $('[data-dash-filter]').forEach(el=>el.onchange=()=>{ const k=el.dataset.dashFilter; state.filters.dashboard[k]=el.value; if(k==='regionId'){state.filters.dashboard.district='';state.filters.dashboard.village='';} if(k==='district')state.filters.dashboard.village=''; render(); });
-    $('[data-search-hotels]').forEach(b=>b.onclick=()=>{
+    $$('[data-dash-filter]').forEach(el=>el.onchange=()=>{ const k=el.dataset.dashFilter; state.filters.dashboard[k]=el.value; if(k==='regionId'){state.filters.dashboard.district='';state.filters.dashboard.village='';} if(k==='district')state.filters.dashboard.village=''; render(); });
+    $$('[data-search-hotels]').forEach(b=>b.onclick=()=>{
       const results=dashboardFiltered();
       const f=state.filters.dashboard;
       const labels=[];
@@ -220,7 +220,7 @@
       toast(`${num(results.length)} hotel ditemukan${labels.length?' di '+labels.join(', '):''}`);
       setTimeout(()=>document.querySelector('#hotelSearchResults')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
     });
-    $('[data-filter]').forEach(el=>{const evt=el.tagName==='INPUT'?'input':'change';el.addEventListener(evt,()=>{const [grp,key]=el.dataset.filter.split('.');state.filters[grp][key]=el.value;render();});});
+    $$('[data-filter]').forEach(el=>{const evt=el.tagName==='INPUT'?'input':'change';el.addEventListener(evt,()=>{const [grp,key]=el.dataset.filter.split('.');state.filters[grp][key]=el.value;render();});});
     $$('[data-add]').forEach(b=>b.onclick=()=>openForm(b.dataset.add));
     $$('[data-edit]').forEach(b=>b.onclick=()=>openForm(b.dataset.edit,b.dataset.id));
     $$('[data-delete]').forEach(b=>b.onclick=()=>remove(b.dataset.delete,b.dataset.id));
